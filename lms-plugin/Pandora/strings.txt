@@ -1,0 +1,16 @@
+# LMS plugin string table. Format: KEY=English text.
+# LMS falls back to these English strings; translators can override
+# by adding <language>/strings.txt next to this file.
+
+PLUGIN_PANDORA=Pandora
+PLUGIN_PANDORA_DESCRIPTION=Stream Pandora stations to your Squeezeboxen
+PLUGIN_PANDORA_SETTINGS=Pandora plugin
+PLUGIN_PANDORA_SIGN_IN=Sign in to Pandora
+PLUGIN_PANDORA_SIGN_IN_BUTTON=Sign in
+PLUGIN_PANDORA_HELPER=Helper connection
+PLUGIN_PANDORA_SAVE=Save
+PLUGIN_PANDORA_HELPER_STATUS=Helper status
+PLUGIN_PANDORA_LOGGED_IN=logged in
+PLUGIN_PANDORA_NOT_LOGGED_IN=not logged in
+PLUGIN_PANDORA_NO_STATION=No station selected. Pick one from My Apps \u2192 Pandora first.
+PLUGIN_PANDORA_HELPER_UNREACHABLE=Pandora helper is unreachable, or you're not logged in. Open Settings \u2192 Plugins \u2192 Pandora to sign in.

@@ -1,0 +1,35 @@
+[Unit]
+Description=windora-lms helper (Pandora for Logitech Media Server)
+Documentation=https://github.com/anomalyco/windora-lms
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Run as a dedicated `windora-lms` user. Create it with:
+#   sudo useradd --system --home /var/lib/windora-lms \
+#                --shell /usr/sbin/nologin windora-lms
+# Override with `systemctl edit windora-lms-helper` if you need a different
+# account (e.g. to share the LMS user's group).
+User=windora-lms
+Group=windora-lms
+WorkingDirectory=/opt/windora-lms
+Environment="WINDORA_VENV=/opt/windora-lms/.venv"
+Environment="WINDORA_CONFIG_DIR=/var/lib/windora-lms"
+ExecStart=/opt/windora-lms/scripts/windora-lms-helper.sh
+Restart=on-failure
+RestartSec=5
+# Hardening — the helper only ever talks to tuner.pandora.com over HTTPS,
+# and only ever listens on 127.0.0.1.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+ReadWritePaths=/var/lib/windora-lms
+
+[Install]
+WantedBy=multi-user.target
