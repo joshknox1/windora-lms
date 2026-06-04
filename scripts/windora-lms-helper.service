@@ -1,6 +1,6 @@
 [Unit]
 Description=windora-lms helper (Pandora for Logitech Media Server)
-Documentation=https://github.com/anomalyco/windora-lms
+Documentation=https://github.com/joshknox1/windora-lms
 After=network-online.target
 Wants=network-online.target
 

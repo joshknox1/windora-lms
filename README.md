@@ -60,7 +60,7 @@ sudo install -d -o windora-lms -g windora-lms /opt/windora-lms
 sudo install -d -o windora-lms -g windora-lms /var/lib/windora-lms
 sudo useradd --system --home /var/lib/windora-lms \
              --shell /usr/sbin/nologin windora-lms
-git clone https://github.com/anomalyco/windora-lms.git /opt/windora-lms-src
+git clone https://github.com/joshknox1/windora-lms.git /opt/windora-lms-src
 sudo rsync -a --chown=windora-lms:windora-lms \
     /opt/windora-lms-src/ /opt/windora-lms/
 
