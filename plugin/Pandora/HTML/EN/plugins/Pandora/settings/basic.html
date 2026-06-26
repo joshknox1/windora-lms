@@ -1,0 +1,62 @@
+[% PROCESS settings/header.html %]
+
+<div class="settingGroup">
+	<div class="settingSubGroup">
+		<div class="prefHead">[% "PLUGIN_PANDORA_STATUS" | string %]</div>
+		<div class="prefDesc">
+			[% IF helperReachable %]
+				[% IF helperLoggedIn %]
+					<strong style="color:#1a7f37">[% "PLUGIN_PANDORA_STATUS_SIGNED_IN" | string %]</strong>
+					[% IF helperUserId %] (user [% helperUserId | html %])[% END %]
+					&mdash; [% helperStations %] [% "PLUGIN_PANDORA_STATIONS_CACHED" | string %]
+				[% ELSE %]
+					<strong style="color:#b42318">[% "PLUGIN_PANDORA_STATUS_NOT_SIGNED_IN" | string %]</strong>
+				[% END %]
+			[% ELSE %]
+				<strong style="color:#b42318">[% "PLUGIN_PANDORA_STATUS_HELPER_DOWN" | string %]</strong>
+			[% END %]
+		</div>
+	</div>
+</div>
+
+<div class="settingGroup">
+	<div class="settingSubGroup">
+		<div class="prefHead">[% "PLUGIN_PANDORA_HELPER_CONNECTION" | string %]</div>
+
+		<div class="settingGroup">
+			<div class="prefName">[% "PLUGIN_PANDORA_HELPER_HOST" | string %]</div>
+			<input type="text" name="pref_helperHost" value="[% prefs.helperHost | html %]" size="24">
+		</div>
+
+		<div class="settingGroup">
+			<div class="prefName">[% "PLUGIN_PANDORA_HELPER_PORT" | string %]</div>
+			<input type="text" name="pref_helperPort" value="[% prefs.helperPort | html %]" size="8">
+		</div>
+
+		<div class="prefDesc">[% "PLUGIN_PANDORA_HELPER_DESC" | string %]</div>
+	</div>
+</div>
+
+<div class="settingGroup">
+	<div class="settingSubGroup">
+		<div class="prefHead">[% "PLUGIN_PANDORA_SIGNIN" | string %]</div>
+
+		<div class="settingGroup">
+			<div class="prefName">[% "PLUGIN_PANDORA_EMAIL" | string %]</div>
+			<input type="text" name="pref_email" value="[% prefs.authEmail | html %]" size="32" autocomplete="username">
+		</div>
+
+		<div class="settingGroup">
+			<div class="prefName">[% "PLUGIN_PANDORA_PASSWORD" | string %]</div>
+			<input type="password" name="pref_password" value="" size="32" autocomplete="current-password">
+		</div>
+
+		<div class="settingGroup">
+			<input type="submit" name="signin" value="[% "PLUGIN_PANDORA_SIGNIN_BUTTON" | string %]">
+		</div>
+
+		<div class="prefDesc">[% "PLUGIN_PANDORA_SIGNIN_DESC" | string %]</div>
+	</div>
+</div>
+
+[% PROCESS settings/footer.html %]

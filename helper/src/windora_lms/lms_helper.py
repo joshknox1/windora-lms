@@ -1,33 +1,36 @@
-"""HTTP service the LMS Perl plugin calls.
+"""Localhost HTTP service the LMS Perl plugin calls.
 
-Binds 127.0.0.1 only — never expose to the network. It holds your Pandora
-credentials and an authenticated session, and serves the small set of queries
-the LMS plugin needs to drive playback.
+Binds 127.0.0.1 only by default — never expose it to the network. It holds your
+Pandora credentials and an authenticated session, and serves the small set of
+queries the LMS plugin needs to drive playback.
 
-Endpoints (all JSON; all GET unless noted):
+The plugin's protocol handler resolves ONE fresh track per song via
+`/station/<token>/next` right before that song plays, so Pandora's short-lived
+CDN URLs never go stale in a pre-filled LMS playlist.
+
+Endpoints (all JSON):
 
     POST /auth
         Body: {"email": "...", "password": "..."}
         -> {"ok": true} on success, {"ok": false, "error": "..."} on failure
-        Credentials are persisted to ~/.config/windora/credentials.json (mode 0600).
+        Credentials are persisted to $WINDORA_CONFIG_DIR/credentials.json (0600).
 
     GET  /status
-        -> {"logged_in": bool, "user_id": str?, "station_count": int, "error": str?}
+        -> {"logged_in": bool, "user_id": str|null, "station_count": int}
 
     GET  /stations
-        -> [{"id": str, "name": str, "is_quickmix": bool}, ...]
+        -> [{"id": str, "token": str, "name": str, "is_quickmix": bool}, ...]
         -> 503 if not logged in
 
     GET  /station/<token>/next
         -> {title, artist, album, audio_url, bitrate_kbps, duration_s,
-            is_ad, album_art_url, track_token}
-        -> 503 if not logged in
-        -> 404 if station token unknown
-        -> 502 if upstream Pandora error
+            is_ad, album_art_url, track_token, station_token}
+        -> 503 if not logged in, 502 on upstream Pandora error
 
-Ads in the Pandora playlist are filtered out (they have no audioUrl and would
-just 404 the player). Skipping a track in LMS does not currently count as a
-Pandora skip — it's just a playlist advance. v0.2 will wire thumbs/sleep.
+    POST /feedback   Body: {"track_token": "...", "is_positive": bool} -> {"ok": true}
+    POST /sleep      Body: {"track_token": "..."}                      -> {"ok": true}
+
+Ads are filtered out (they carry no audioUrl and would just 404 the player).
 
 Run as a systemd unit; see scripts/windora-lms-helper.service.
 """
@@ -46,7 +49,7 @@ from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from windora_lms.pandora.client import AuthError, PandoraClient, PandoraError
 from windora_lms.pandora.models import Track
@@ -59,7 +62,7 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9123
 
 CONFIG_DIR = Path(os.environ.get("WINDORA_CONFIG_DIR")
-                  or Path.home() / ".config" / "windora")
+                  or Path.home() / ".config" / "windora-lms")
 CREDENTIALS_FILE = CONFIG_DIR / "credentials.json"
 PORT_FILE = CONFIG_DIR / "lms-helper.port"
 LOG_FILE = CONFIG_DIR / "lms-helper.log"
@@ -91,22 +94,22 @@ def _save_credentials(email: str, password: str) -> None:
 
 
 class Session:
-    """Holds the authed PandoraClient and per-station playlist cache.
+    """Holds the authed PandoraClient and a small per-station track cache.
 
-    The cache is just a deque of Tracks. When it empties, the next request
-    triggers a fresh getPlaylist call. Ads are filtered at insertion time.
+    Pandora's station.getPlaylist returns a handful of tracks at once; we hand
+    them out one at a time and refetch when the cache runs low. Each track is
+    consumed (and streamed) right after it's pulled, so its CDN URL is fresh.
     """
 
-    LOW_WATER = 2   # refill when cache drops to this size
-    REFILL_TARGET = 6  # keep this many queued per station
+    LOW_WATER = 1       # refill when a station's cache drops to this size
+    REFILL_TARGET = 4   # Pandora hands back ~4 per getPlaylist call
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._client: Optional[PandoraClient] = None
         self._email: Optional[str] = None
         self._user_id: Optional[str] = None
-        # station_token -> list[Track]
-        self._queues: dict[str, list[Track]] = {}
+        self._queues: dict[str, list[Track]] = {}  # station_token -> [Track]
 
     # --- auth --------------------------------------------------------------
 
@@ -152,7 +155,8 @@ class Session:
                 self._reauth()
                 stations = self._client.get_stations()
             return [
-                {"id": s.id, "name": s.name, "is_quickmix": s.is_quickmix}
+                {"id": s.id, "token": s.token, "name": s.name,
+                 "is_quickmix": s.is_quickmix}
                 for s in stations
             ]
 
@@ -164,9 +168,26 @@ class Session:
             queue = self._queues.setdefault(station_token, [])
             self._maybe_refill_locked(station_token, queue)
             if not queue:
-                # Refill failed — caller will see the empty result and 502.
                 raise PandoraError("Playlist exhausted and refill failed")
             return queue.pop(0)
+
+    def feedback(self, track_token: str, is_positive: bool) -> None:
+        with self._lock:
+            self._require_client()
+            try:
+                self._client.add_feedback(track_token, is_positive)
+            except AuthError:
+                self._reauth()
+                self._client.add_feedback(track_token, is_positive)
+
+    def sleep_song(self, track_token: str) -> None:
+        with self._lock:
+            self._require_client()
+            try:
+                self._client.sleep_song(track_token)
+            except AuthError:
+                self._reauth()
+                self._client.sleep_song(track_token)
 
     def _maybe_refill_locked(self, station_token: str,
                              queue: list[Track]) -> None:
@@ -204,7 +225,7 @@ class _Json:
 
 
 def _make_handler(session: Session) -> type[BaseHTTPRequestHandler]:
-    """Build a handler class bound to a specific Session."""
+    """Build a request handler class bound to a specific Session."""
 
     class _Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt: str, *args) -> None:
@@ -213,7 +234,7 @@ def _make_handler(session: Session) -> type[BaseHTTPRequestHandler]:
         def do_GET(self) -> None:
             try:
                 response = self._dispatch_get(self.path)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - last-resort guard
                 log.exception("Unhandled error in GET %s", self.path)
                 response = _Json({"error": str(e)}, 500)
             self._send(response)
@@ -221,12 +242,12 @@ def _make_handler(session: Session) -> type[BaseHTTPRequestHandler]:
         def do_POST(self) -> None:
             try:
                 length = int(self.headers.get("Content-Length") or 0)
-                body = self.rfile.read(length).decode("utf-8") if length else "{}"
+                body = self.rfile.read(length).decode("utf-8") if length else ""
                 data = json.loads(body) if body else {}
                 response = self._dispatch_post(self.path, data)
             except json.JSONDecodeError as e:
                 response = _Json({"error": f"invalid JSON: {e}"}, 400)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - last-resort guard
                 log.exception("Unhandled error in POST %s", self.path)
                 response = _Json({"error": str(e)}, 500)
             self._send(response)
@@ -247,7 +268,7 @@ def _make_handler(session: Session) -> type[BaseHTTPRequestHandler]:
             # /station/<token>/next
             parts = p.strip("/").split("/")
             if len(parts) == 3 and parts[0] == "station" and parts[2] == "next":
-                token = parts[1]
+                token = unquote(parts[1])
                 if not session.is_logged_in():
                     return _Json({"error": "not logged in"}, 503)
                 try:
@@ -270,6 +291,24 @@ def _make_handler(session: Session) -> type[BaseHTTPRequestHandler]:
                     return _Json({"ok": False, "error": str(e)}, 401)
                 _save_credentials(email, password)
                 return _Json({"ok": True})
+            if p == "/feedback":
+                token = (data.get("track_token") or "").strip()
+                if not token:
+                    return _Json({"ok": False, "error": "track_token required"}, 400)
+                try:
+                    session.feedback(token, bool(data.get("is_positive")))
+                except (AuthError, PandoraError) as e:
+                    return _Json({"ok": False, "error": str(e)}, 502)
+                return _Json({"ok": True})
+            if p == "/sleep":
+                token = (data.get("track_token") or "").strip()
+                if not token:
+                    return _Json({"ok": False, "error": "track_token required"}, 400)
+                try:
+                    session.sleep_song(token)
+                except (AuthError, PandoraError) as e:
+                    return _Json({"ok": False, "error": str(e)}, 502)
+                return _Json({"ok": True})
             return _Json({"error": "not found"}, 404)
 
         # --- response ------------------------------------------------------
@@ -285,85 +324,6 @@ def _make_handler(session: Session) -> type[BaseHTTPRequestHandler]:
 
     return _Handler
 
-    # Quieter logs — one line per request, not the default dual-line.
-    def log_message(self, fmt: str, *args) -> None:
-        log.info("%s - %s", self.address_string(), fmt % args)
-
-    def do_GET(self) -> None:
-        try:
-            response = self._dispatch_get(self.path)
-        except Exception as e:
-            log.exception("Unhandled error in GET %s", self.path)
-            response = _Json({"error": str(e)}, 500)
-        self._send(response)
-
-    def do_POST(self) -> None:
-        try:
-            length = int(self.headers.get("Content-Length") or 0)
-            body = self.rfile.read(length).decode("utf-8") if length else "{}"
-            data = json.loads(body) if body else {}
-            response = self._dispatch_post(self.path, data)
-        except json.JSONDecodeError as e:
-            response = _Json({"error": f"invalid JSON: {e}"}, 400)
-        except Exception as e:
-            log.exception("Unhandled error in POST %s", self.path)
-            response = _Json({"error": str(e)}, 500)
-        self._send(response)
-
-    # --- routing -----------------------------------------------------------
-
-    def _dispatch_get(self, path: str) -> _Json:
-        p = urlparse(path).path
-        if p == "/status":
-            return _Json(self.session.status())
-        if p == "/stations":
-            if not self.session.is_logged_in():
-                return _Json({"error": "not logged in"}, 503)
-            try:
-                return _Json(self.session.list_stations())
-            except (AuthError, PandoraError) as e:
-                return _Json({"error": str(e)}, 502)
-        # /station/<token>/next
-        parts = p.strip("/").split("/")
-        if len(parts) == 3 and parts[0] == "station" and parts[2] == "next":
-            token = parts[1]
-            if not self.session.is_logged_in():
-                return _Json({"error": "not logged in"}, 503)
-            try:
-                track = self.session.next_track(token)
-            except PandoraError as e:
-                if "exhausted" in str(e):
-                    return _Json({"error": str(e)}, 502)
-                return _Json({"error": str(e)}, 502)
-            return _Json(_track_to_dict(track))
-        return _Json({"error": "not found"}, 404)
-
-    def _dispatch_post(self, path: str, data: dict) -> _Json:
-        p = urlparse(path).path
-        if p == "/auth":
-            email = (data.get("email") or "").strip()
-            password = data.get("password") or ""
-            if not email or not password:
-                return _Json({"ok": False, "error": "email and password required"}, 400)
-            try:
-                self.session.login(email, password)
-            except (AuthError, PandoraError) as e:
-                return _Json({"ok": False, "error": str(e)}, 401)
-            _save_credentials(email, password)
-            return _Json({"ok": True})
-        return _Json({"error": "not found"}, 404)
-
-    # --- response ----------------------------------------------------------
-
-    def _send(self, response: _Json) -> None:
-        body = json.dumps(response.payload).encode("utf-8")
-        self.send_response(response.status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
-
 
 def _track_to_dict(t: Track) -> dict:
     return {
@@ -376,6 +336,7 @@ def _track_to_dict(t: Track) -> dict:
         "is_ad": t.is_ad,
         "album_art_url": t.album_art_url,
         "track_token": t.token,
+        "station_token": t.station_token,
     }
 
 
@@ -384,8 +345,7 @@ def _track_to_dict(t: Track) -> dict:
 
 def make_server(host: str, port: int) -> ThreadingHTTPServer:
     session = Session()
-    # Try to resume from disk first; if it fails, we just stay logged-out
-    # until someone POSTs /auth.
+    # Resume from disk if we can; otherwise stay logged out until /auth.
     session.try_resume_from_disk()
     return ThreadingHTTPServer((host, port), _make_handler(session))
 
@@ -408,15 +368,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--port", type=int,
                         default=int(os.environ.get("WINDORA_HELPER_PORT", DEFAULT_PORT)))
     parser.add_argument("--no-port-file", action="store_true",
-                        help="Don't write the port file the LMS plugin reads")
+                        help="Don't write the port file")
     parser.add_argument("--log-file", default=str(LOG_FILE),
                         help="Log file (default: %(default)s)")
     parser.add_argument("--log-level", default="INFO",
                         choices=("DEBUG", "INFO", "WARNING", "ERROR"))
     args = parser.parse_args(argv)
 
-    # File logging — systemd captures stdout, but a file is useful when
-    # running by hand for debugging.
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=args.log_level,
@@ -436,7 +394,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     def _shutdown(signum, _frame):
         log.info("Caught signal %d, shutting down", signum)
-        # shutdown() must be called from a different thread than serve_forever.
+        # shutdown() must run on a different thread than serve_forever.
         threading.Thread(target=server.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, _shutdown)

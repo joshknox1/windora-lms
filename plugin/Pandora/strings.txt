@@ -1,0 +1,65 @@
+PLUGIN_PANDORA
+	EN	Pandora
+
+PLUGIN_PANDORA_DESC
+	EN	Stream your Pandora stations to your Squeezebox players. Requires the windora-lms-helper service running on the LMS host.
+
+PLUGIN_PANDORA_NOT_SIGNED_IN
+	EN	Not signed in. Open Settings > Plugins > Pandora to sign in.
+
+PLUGIN_PANDORA_NO_STATIONS
+	EN	No stations found on your Pandora account.
+
+PLUGIN_PANDORA_HELPER_ERROR
+	EN	Could not reach the Pandora helper
+
+PLUGIN_PANDORA_STATUS
+	EN	Status
+
+PLUGIN_PANDORA_STATUS_SIGNED_IN
+	EN	Signed in to Pandora
+
+PLUGIN_PANDORA_STATUS_NOT_SIGNED_IN
+	EN	Helper running, but not signed in
+
+PLUGIN_PANDORA_STATUS_HELPER_DOWN
+	EN	Helper service unreachable - check that windora-lms-helper is running and the host/port below are correct.
+
+PLUGIN_PANDORA_STATIONS_CACHED
+	EN	stations active
+
+PLUGIN_PANDORA_HELPER_CONNECTION
+	EN	Helper connection
+
+PLUGIN_PANDORA_HELPER_HOST
+	EN	Helper host
+
+PLUGIN_PANDORA_HELPER_PORT
+	EN	Helper port
+
+PLUGIN_PANDORA_HELPER_DESC
+	EN	Where the windora-lms-helper service is listening. Default 127.0.0.1:9123 when the helper runs on the same machine as Logitech Media Server.
+
+PLUGIN_PANDORA_SIGNIN
+	EN	Sign in to Pandora
+
+PLUGIN_PANDORA_EMAIL
+	EN	Email
+
+PLUGIN_PANDORA_PASSWORD
+	EN	Password
+
+PLUGIN_PANDORA_SIGNIN_BUTTON
+	EN	Sign in
+
+PLUGIN_PANDORA_SIGNIN_DESC
+	EN	Your Pandora credentials are sent to the helper, which validates them and stores them on the helper host (mode 0600). They are never written to the LMS database.
+
+PLUGIN_PANDORA_NEED_PASSWORD
+	EN	Please enter your Pandora password.
+
+PLUGIN_PANDORA_SIGNED_IN
+	EN	Signed in as
+
+PLUGIN_PANDORA_SIGNIN_FAILED
+	EN	Sign-in failed:

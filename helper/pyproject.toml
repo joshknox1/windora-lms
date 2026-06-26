@@ -1,7 +1,7 @@
 [project]
-name = "windora-lms"
+name = "windora-lms-helper"
 version = "0.1.0"
-description = "Pandora streaming for Logitech Media Server — Perl plugin + Python helper."
+description = "Pandora protocol helper service for the Logitech Media Server plugin."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

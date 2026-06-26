@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension>
+	<id>pandora</id>
+	<name>PLUGIN_PANDORA</name>
+	<title lang="EN">Pandora (Windora)</title>
+	<description>PLUGIN_PANDORA_DESC</description>
+	<creator>Windora contributors</creator>
+	<email></email>
+	<url>https://github.com/joshknox1/WindoraLMS</url>
+	<homepage>https://github.com/joshknox1/WindoraLMS</homepage>
+	<version>0.1.0</version>
+	<targetApplication>
+		<id>squeezecenter</id>
+		<minVersion>8.0</minVersion>
+		<maxVersion>9.*</maxVersion>
+	</targetApplication>
+	<module>Plugins::Pandora::Plugin</module>
+	<defaultState>enabled</defaultState>
+</extension>
