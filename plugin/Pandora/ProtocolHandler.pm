@@ -47,9 +47,12 @@ sub isAudioURL { 1 }
 
 sub getFormatForURL {
     my ($class, $url) = @_;
-    # Pandora hands us MP3 (and sometimes AAC) CDN URLs. The actual format is
-    # set per-track from the resolved stream URL in getNextTrack(); default mp3.
-    return 'mp3';
+    # Pandora (iPhone partner) serves 64k HE-AAC in an .mp4 container. The
+    # android partner — which used to give MP3 — is rejected by Pandora now,
+    # so everything is AAC. LMS transcodes it via ffmpeg/faad for the player.
+    # If a real stream URL is passed, still honour an explicit mp3 extension.
+    return 'mp3' if $url =~ /\.mp3\b/i;
+    return 'aac';
 }
 
 # Pull the station token out of pandora://<token>.
@@ -112,7 +115,7 @@ sub getNextTrack {
             $song->pluginData(meta => $meta);
             $currentMeta{ $client->id } = $meta if $client;
 
-            $log->info("Now playing: %s — %s", $meta->{artist}, $meta->{title});
+            $log->info(sprintf('Now playing: %s - %s', $meta->{artist}, $meta->{title}));
             $successCb->();
         },
         sub {
