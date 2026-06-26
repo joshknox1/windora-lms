@@ -86,16 +86,30 @@ sudo systemctl status windora-lms-helper
 No `uv`? Use any Python ≥3.11: `python3 -m venv /opt/windora-lms/.venv &&
 /opt/windora-lms/.venv/bin/pip install -e /opt/windora-lms`.
 
-### 2. Install the LMS plugin
+### 2. Install ffmpeg (required for audio)
+
+Pandora streams 64 kbps HE-AAC in an `.mp4` container. Squeezebox/squeezelite
+players advertise "aac" support but can't actually decode Pandora's HE-AAC, so
+the plugin transcodes it to FLAC on the server with **ffmpeg**. Without ffmpeg
+you'll hear nothing and the player logs *"Decoder does not support file format"*.
+
+```bash
+sudo apt install -y ffmpeg     # Debian/Ubuntu LMS hosts
+```
+
+The plugin ships a `custom-convert.conf` that disables the broken AAC
+passthrough and routes Pandora audio through `ffmpeg … -f flac`.
+
+### 3. Install the LMS plugin
 
 ```bash
 # Drop the plugin into LMS's Plugins directory. The exact path varies by
 # packaging; find yours with:  sudo find / -type d -name Plugins 2>/dev/null
-sudo rsync -a plugin/Pandora/ /usr/share/squeezeboxserver/Plugins/Pandora/
-sudo systemctl restart logitechmediaserver   # or: lyrionmediaserver / squeezeboxserver
+sudo rsync -a plugin/Pandora/ /var/lib/squeezeboxserver/Plugins/Pandora/
+sudo systemctl restart lyrionmusicserver   # or: logitechmediaserver / squeezeboxserver
 ```
 
-### 3. Sign in
+### 4. Sign in
 
 LMS web UI → **Settings → Advanced → Pandora** (or **Settings → Plugins**).
 Confirm the helper status shows **reachable**, then enter your Pandora email and
@@ -103,7 +117,7 @@ password and click **Sign in**. Credentials go to the helper, which validates
 them against Pandora and stores them at
 `/var/lib/windora-lms/credentials.json` (mode 0600) — never in the LMS DB.
 
-### 4. Play
+### 5. Play
 
 On any Squeezebox: **My Apps → Pandora** → pick a station. The first track
 starts and playback auto-advances; **Next** skips to a fresh track.
