@@ -15,5 +15,6 @@
 		<maxVersion>9.*</maxVersion>
 	</targetApplication>
 	<module>Plugins::Pandora::Plugin</module>
+	<icon>plugins/Pandora/html/images/pandora.png</icon>
 	<defaultState>enabled</defaultState>
 </extension>
